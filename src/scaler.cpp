@@ -9,11 +9,13 @@
 
 #define DIV_UP(a, b) ( ((a) + (b) - 1) / (b) )
 #define BLOCKX 32
-#define BLOCKY 16
+#define REGISTERS_PER_THREAD 32
 
 static void *gCudaDriver = 0;
 static CUcontext gVideoCtx;
 extern "C" const unsigned char _binary_scaler_kernel_cubin_start[];
+static int gMaxRegs = 0; // Total number of registers available per block
+static int gMaxThreads = 0; // Maximum number of threads per block
 
 Scaler::Scaler(QObject *parent, const char *infile, const char *outfile, int outwidth, int outheight) : QObject(parent), output(outfile), width(outwidth), height(outheight)
 {
@@ -38,6 +40,18 @@ Scaler::Scaler(QObject *parent, const char *infile, const char *outfile, int out
     if(cuStatus != CUDA_SUCCESS)
     {
         fprintf(stderr, "Failed get CUDA info: [%d]\n", cuStatus);
+        exit(1);
+    }
+    cuStatus = cuDeviceGetAttribute(&gMaxRegs, CU_DEVICE_ATTRIBUTE_MAX_REGISTERS_PER_BLOCK, device);
+    if(cuStatus != CUDA_SUCCESS)
+    {
+        fprintf(stderr, "Failed get CUDA attribute: [%d]\n", cuStatus);
+        exit(1);
+    }
+    cuStatus = cuDeviceGetAttribute(&gMaxThreads, CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK, device);
+    if(cuStatus != CUDA_SUCCESS)
+    {
+        fprintf(stderr, "Failed get CUDA attribute: [%d]\n", cuStatus);
         exit(1);
     }
     cuStatus = cuCtxCreate(&gVideoCtx, CU_CTX_SCHED_AUTO, device);
@@ -115,7 +129,7 @@ void Scaler::run()
                                 cuStatus = cuMemAllocHost((void**)&outImageBuffer, width * height * 4);
                                 if(cuStatus == CUDA_SUCCESS)
                                 {
-                                    uint64_t nsecs = 0;
+                                    qint64 nsecs = 0;
 #if 0 // just copy
                                     memset(&memcpy2D, 0, sizeof(memcpy2D));
 
@@ -151,11 +165,11 @@ void Scaler::run()
                                             if(cuStatus == CUDA_SUCCESS)
                                             {
                                                 QElapsedTimer timer;
+                                                int blocky = qMin((gMaxRegs / (BLOCKX * REGISTERS_PER_THREAD)), (gMaxThreads / BLOCKX));
 
                                                 timer.start();
-                                                cuStatus = cuLaunchKernel(funcResizeARGB, DIV_UP(width, BLOCKX), DIV_UP(height, BLOCKY), 1, BLOCKX, BLOCKY, 1, 0, 0, args_uchar, NULL);
+                                                cuStatus = cuLaunchKernel(funcResizeARGB, DIV_UP(width, BLOCKX), DIV_UP(height, blocky), 1, BLOCKX, blocky, 1, 0, 0, args_uchar, NULL);
                                                 nsecs = timer.nsecsElapsed();
-
                                             }
                                             else
                                             {
