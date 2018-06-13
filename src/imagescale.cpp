@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2018 Schreibikus https://github.com/schreibikus
+ * License: http://www.gnu.org/licenses/gpl.html GPL version 3 or higher
+ */
+
 #include <QtCore>
 #include "scaler.h"
 
