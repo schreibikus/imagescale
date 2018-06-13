@@ -5,6 +5,7 @@
 
 texture<uchar4, 2> argb_tex;
 
+/* This function based on Subsample_Bilinear_uchar4 function from vf_scale_cuda.cu */
 extern "C" __global__ void resizeARGB(uchar4 *dst, int dst_width, int dst_height, int dst_pitch, float hscale, float vscale)
 {
     int xo = blockIdx.x * blockDim.x + threadIdx.x;
